@@ -7,7 +7,7 @@ from app.agent.email_agent import EmailAgent, RankedArticleDetail, EmailDigestRe
 from app.agent.curator_agent import CuratorAgent
 from app.profiles.user_profile import USER_PROFILE
 from app.database.repository import Repository
-from app.services.email import send_email, digest_to_html
+from app.services.email_utils import send_email, digest_to_html
 
 logging.basicConfig(
     level=logging.INFO,
