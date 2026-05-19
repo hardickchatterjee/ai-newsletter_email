@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
+import re
 import feedparser
-from docling.document_converter import DocumentConverter
+import requests
+from bs4 import BeautifulSoup
 from pydantic import BaseModel
 
 
@@ -21,7 +23,6 @@ class AnthropicScraper:
             "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_research.xml",
             "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_engineering.xml",
         ]
-        self.converter = DocumentConverter()
 
     def get_articles(self, hours: int = 24) -> List[AnthropicArticle]:
         now = datetime.now(timezone.utc)
@@ -30,7 +31,12 @@ class AnthropicScraper:
         seen_guids = set()
         
         for rss_url in self.rss_urls:
-            feed = feedparser.parse(rss_url)
+            try:
+                response = requests.get(rss_url, timeout=15)
+                response.raise_for_status()
+                feed = feedparser.parse(response.content)
+            except Exception:
+                continue
             if not feed.entries:
                 continue
             
@@ -57,8 +63,13 @@ class AnthropicScraper:
 
     def url_to_markdown(self, url: str) -> Optional[str]:
         try:
-            result = self.converter.convert(url)
-            return result.document.export_to_markdown()
+            response = requests.get(url, timeout=15)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, "html.parser")
+            for tag in soup(["script", "style", "nav", "footer", "header"]):
+                tag.decompose()
+            text = soup.get_text(separator="\n", strip=True)
+            return re.sub(r"\n{3,}", "\n\n", text)
         except Exception:
             return None
 

@@ -110,7 +110,7 @@ class Repository:
                     published_at=a["published_at"],
                     description=a.get("description", ""),
                     category=a.get("category")
-                ))
+                )) 
         if new_articles:
             self.session.add_all(new_articles)
             self.session.commit()

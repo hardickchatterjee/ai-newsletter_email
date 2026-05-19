@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 import os
 import feedparser
+import requests
 from pydantic import BaseModel
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
@@ -58,7 +59,12 @@ class YouTubeScraper:
             return None
 
     def get_latest_videos(self, channel_id: str, hours: int = 24) -> list[ChannelVideo]:
-        feed = feedparser.parse(self._get_rss_url(channel_id))
+        try:
+            response = requests.get(self._get_rss_url(channel_id), timeout=15)
+            response.raise_for_status()
+            feed = feedparser.parse(response.content)
+        except Exception:
+            return []
         if not feed.entries:
             return []
         
