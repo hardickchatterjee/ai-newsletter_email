@@ -1,7 +1,11 @@
 from typing import Optional
 import logging
+import time
 import sys
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -40,7 +44,7 @@ def process_digests(limit: Optional[int] = None) -> dict:
                 content=article["content"],
                 article_type=article_type
             )
-            
+
             if digest_result:
                 repo.create_digest(
                     article_type=article_type,
@@ -58,6 +62,8 @@ def process_digests(limit: Optional[int] = None) -> dict:
         except Exception as e:
             failed += 1
             logger.error(f"✗ Error processing {article_type} {article_id}: {e}")
+
+        time.sleep(1)
     
     logger.info(f"Processing complete: {processed} processed, {failed} failed out of {total} total")
     
@@ -69,7 +75,7 @@ def process_digests(limit: Optional[int] = None) -> dict:
 
 
 if __name__ == "__main__":
-    result = process_digests()
+    result = process_digests(limit=5)
     print(f"Total articles: {result['total']}")
     print(f"Processed: {result['processed']}")
     print(f"Failed: {result['failed']}")

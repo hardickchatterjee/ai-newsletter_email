@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /Users/hardickchatterjee/ai-news-aggregator && uv run python -m py_compile app/scrapers/anthropic.py app/scrapers/openai.py app/scrapers/youtube.py",
+            "statusMessage": "Checking scraper syntax... hook 1"
+          }
+        ]
+      }
+    ]
+  }
+}
