@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from app.database.create_tables import create_tables
 from app.runner import run_scrapers
 from app.services.process_anthropic import process_anthropic_markdown
 from app.services.process_youtube import process_youtube_transcripts
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 
 def run_daily_pipeline(hours: int = 24, top_n: int = 10) -> dict:
+    create_tables()
     start_time = datetime.now()
     logger.info("=" * 60)
     logger.info("Starting Daily AI News Aggregator Pipeline")
