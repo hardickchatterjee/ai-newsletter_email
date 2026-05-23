@@ -25,7 +25,7 @@ python app/services/process_youtube.py
 python app/services/process_digest.py
 python app/services/process_email.py
 
-# Create database tables (run once on first setup)
+# Create database tables manually (daily_runner does this automatically now)
 python app/database/create_tables.py
 
 # Start the PostgreSQL database
@@ -52,11 +52,31 @@ Copy `docker/example.env` to `.env` in the project root. Required variables:
 | Variable | Purpose |
 |---|---|
 | `OPENAI_API_KEY` | Used by all three agents (DigestAgent, CuratorAgent, EmailAgent) |
-| `POSTGRES_USER/PASSWORD/DB/HOST/PORT` | PostgreSQL connection (defaults: postgres/postgres/ai_news_aggregator/localhost/5432) |
+| `GROQ_API_KEY` | Used by all agents (DigestAgent, CuratorAgent, EmailAgent) as fallback |
+| `DATABASE_URL` | Full Postgres connection string — takes priority over individual vars (set by Render automatically) |
+| `POSTGRES_USER/PASSWORD/DB/HOST/PORT` | PostgreSQL connection (defaults: postgres/postgres/ai_news_aggregator/localhost/5432) — used when `DATABASE_URL` is not set |
 | `MY_EMAIL` / `APP_PASSWORD` | Gmail sender credentials for email delivery |
 | `PROXY_USERNAME` / `PROXY_PASSWORD` | Optional Webshare proxy for YouTube transcript fetching |
 
 **Note:** If a local Postgres is already running on port 5432, it will intercept connections before Docker. `brew services stop postgresql` alone may not fully kill the process — use `pg_ctl -D /usr/local/var/postgresql@17 stop` to ensure it's stopped, then restart the Docker container.
+
+## Deployment (Render)
+
+The project deploys to Render as a daily Cron Job. Config is in `render.yaml` at the project root.
+
+```bash
+# Regenerate requirements.txt after adding/updating dependencies
+uv export --frozen --no-dev -o requirements.txt
+```
+
+**Deploy steps:**
+1. Push to GitHub
+2. Render → New → Blueprint → select repo (auto-detects `render.yaml`)
+3. Set secret env vars in Render dashboard: `OPENAI_API_KEY`, `GROQ_API_KEY`, `MY_EMAIL`, `APP_PASSWORD`
+4. `DATABASE_URL` is injected automatically from the linked Render Postgres
+5. Trigger a manual run to verify
+
+**Schedule:** `0 7 * * *` (7 AM UTC daily). Edit in `render.yaml` to change.
 
 ## Architecture
 
@@ -86,6 +106,9 @@ Copy `docker/example.env` to `.env` in the project root. Required variables:
 - **User profiles** (`app/profiles/default_profile.py`): Dicts with keys `name`, `background`, `expertise_level`, `interests` (list), `preferences` (dict). Imported via `app/profiles/__init__.py` as `DEFAULT_PROFILE`. Both `CuratorAgent` and `EmailAgent` receive the profile at construction time.
 - **OpenAI SDK usage**: All agents use `client.responses.parse(...)` with `text_format=<PydanticModel>` for structured output — this is the Responses API, not the Chat Completions API.
 - **No docling**: `docling` cannot be installed on Intel Mac (macOS 13 x86_64) due to torch platform incompatibility. Use `requests` + `beautifulsoup4` for URL-to-text extraction instead.
+- **Database connection**: `app/database/connection.py` checks `DATABASE_URL` first (used by Render), then falls back to individual `POSTGRES_*` vars (used locally with Docker).
+- **Table creation**: `daily_runner.py` calls `create_tables()` at startup — idempotent, safe to run every day. No manual setup needed on fresh deploys.
+- **Dependency management**: `requirements.txt` is committed and generated via `uv export --frozen --no-dev`. Render uses it; local dev uses `uv sync`.
 
 ### Database Schema
 
