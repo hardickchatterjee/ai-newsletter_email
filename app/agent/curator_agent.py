@@ -102,6 +102,7 @@ Provide a relevance score (0.0-10.0) and rank (1-{len(digests)}) for each articl
 
             data = json.loads(response.choices[0].message.content)
             ranked_list = RankedDigestList(**data)
+            # print(ranked_list)
             return ranked_list.articles
         except Exception as e:
             print(f"Error ranking digests: {e}")

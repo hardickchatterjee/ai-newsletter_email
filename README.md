@@ -36,6 +36,30 @@ uv sync
 cd docker && docker compose up -d
 ```
 
+> **Note:** If a local PostgreSQL is already running on port 5432, stop it first with `pg_ctl -D /usr/local/var/postgresql@17 stop` (brew stop alone may not fully kill the process), or remap Docker to a different port in `docker/docker-compose.yaml`.
+
+**Verify the database is up:**
+
+```bash
+# Container should show (healthy)
+docker ps
+
+# Tables should exist
+docker exec -it ai-news-aggregator-db psql -U postgres -d ai_news_aggregator -c "\dt"
+
+# Row counts across all tables
+docker exec -it ai-news-aggregator-db psql -U postgres -d ai_news_aggregator -c "
+SELECT 'youtube_videos' AS table, COUNT(*) FROM youtube_videos
+UNION ALL SELECT 'openai_articles', COUNT(*) FROM openai_articles
+UNION ALL SELECT 'anthropic_articles', COUNT(*) FROM anthropic_articles
+UNION ALL SELECT 'digests', COUNT(*) FROM digests;"
+```
+
+If `\dt` returns no tables, run the one-time setup first:
+```bash
+uv run python app/database/create_tables.py
+```
+
 ### Configure environment
 
 ```bash

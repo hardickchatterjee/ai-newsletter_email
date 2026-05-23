@@ -133,11 +133,12 @@ def digest_to_html(digest_response) -> str:
         return markdown_to_html(digest_response.to_markdown() if hasattr(digest_response, 'to_markdown') else str(digest_response))
     
     html_parts = []
-    greeting_html = markdown.markdown(digest_response.introduction.greeting, extensions=['extra', 'nl2br'])
-    introduction_html = markdown.markdown(digest_response.introduction.introduction, extensions=['extra', 'nl2br'])
-    html_parts.append(f'<div class="greeting">{greeting_html}</div>')
-    html_parts.append(f'<div class="introduction">{introduction_html}</div>')
-    html_parts.append('<hr>')
+    intro_text = html.escape(digest_response.introduction.introduction)
+    greeting_text = html.escape(digest_response.introduction.greeting)
+    html_parts.append(f'''<div class="intro-block">
+  <div class="greeting">{greeting_text}</div>
+  <div class="introduction">{intro_text}</div>
+</div>''')
     
     for article in digest_response.articles:
         html_parts.append(f'<h3>{html.escape(article.title)}</h3>')
@@ -196,27 +197,29 @@ def digest_to_html(digest_response) -> str:
             border-top: 1px solid #e5e5e5;
             margin: 20px 0;
         }}
+        .intro-block {{
+            background-color: #f8f9fa;
+            border-left: 3px solid #0066cc;
+            border-radius: 4px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+        }}
         .greeting {{
-            font-size: 16px;
-            font-weight: 500;
+            font-size: 18px;
+            font-weight: 700;
             color: #1a1a1a;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }}
         .introduction {{
-            color: #4a4a4a;
-            margin-bottom: 20px;
+            font-size: 14px;
+            color: #555;
+            line-height: 1.7;
         }}
         .article-link {{
             display: inline-block;
             margin-top: 8px;
             color: #0066cc;
             font-size: 14px;
-        }}
-        .greeting p {{
-            margin: 0;
-        }}
-        .introduction p {{
-            margin: 0;
         }}
         div {{
             margin: 8px 0;

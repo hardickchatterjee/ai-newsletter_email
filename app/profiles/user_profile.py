@@ -1,4 +1,4 @@
-DEFAULT_PROFILE = {
+USER_PROFILE = {
     "name": "Hardick",
     "background": "Software engineer working on AI applications and tooling",
     "expertise_level": "Intermediate to Advanced",

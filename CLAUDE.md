@@ -30,6 +30,17 @@ python app/database/create_tables.py
 
 # Start the PostgreSQL database
 cd docker && docker compose up -d
+
+# Verify DB is healthy and tables exist
+docker ps  # STATUS should show (healthy)
+docker exec -it ai-news-aggregator-db psql -U postgres -d ai_news_aggregator -c "\dt"
+
+# Check row counts
+docker exec -it ai-news-aggregator-db psql -U postgres -d ai_news_aggregator -c "
+SELECT 'youtube_videos' AS table, COUNT(*) FROM youtube_videos
+UNION ALL SELECT 'openai_articles', COUNT(*) FROM openai_articles
+UNION ALL SELECT 'anthropic_articles', COUNT(*) FROM anthropic_articles
+UNION ALL SELECT 'digests', COUNT(*) FROM digests;"
 ```
 
 There are no tests in this repository yet.
@@ -45,7 +56,7 @@ Copy `docker/example.env` to `.env` in the project root. Required variables:
 | `MY_EMAIL` / `APP_PASSWORD` | Gmail sender credentials for email delivery |
 | `PROXY_USERNAME` / `PROXY_PASSWORD` | Optional Webshare proxy for YouTube transcript fetching |
 
-**Note:** If a local Postgres is already running on port 5432, it will intercept connections before Docker. Either stop the local instance (`brew services stop postgresql`) or remap Docker to a different port.
+**Note:** If a local Postgres is already running on port 5432, it will intercept connections before Docker. `brew services stop postgresql` alone may not fully kill the process — use `pg_ctl -D /usr/local/var/postgresql@17 stop` to ensure it's stopped, then restart the Docker container.
 
 ## Architecture
 
