@@ -51,18 +51,19 @@ Copy `docker/example.env` to `.env` in the project root. Required variables:
 
 | Variable | Purpose |
 |---|---|
-| `OPENAI_API_KEY` | Used by all three agents (DigestAgent, CuratorAgent, EmailAgent) |
-| `GROQ_API_KEY` | Used by all agents (DigestAgent, CuratorAgent, EmailAgent) as fallback |
-| `DATABASE_URL` | Full Postgres connection string — takes priority over individual vars (set by Render automatically) |
+| `GROQ_API_KEY` | Primary LLM API key — all three agents (DigestAgent, CuratorAgent, EmailAgent) use Groq (`llama-3.3-70b-versatile`) |
+| `OPENAI_API_KEY` | Fallback LLM API key if Groq is unavailable |
+| `DATABASE_URL` | Full Postgres connection string — takes priority over individual vars (set by Railway automatically) |
 | `POSTGRES_USER/PASSWORD/DB/HOST/PORT` | PostgreSQL connection (defaults: postgres/postgres/ai_news_aggregator/localhost/5432) — used when `DATABASE_URL` is not set |
-| `MY_EMAIL` / `APP_PASSWORD` | Gmail sender credentials for email delivery |
+| `MY_EMAIL` | Recipient email address for the digest |
+| `RESEND_API_KEY` | Resend API key for email delivery (replaces Gmail SMTP) |
 | `PROXY_USERNAME` / `PROXY_PASSWORD` | Optional Webshare proxy for YouTube transcript fetching |
 
 **Note:** If a local Postgres is already running on port 5432, it will intercept connections before Docker. `brew services stop postgresql` alone may not fully kill the process — use `pg_ctl -D /usr/local/var/postgresql@17 stop` to ensure it's stopped, then restart the Docker container.
 
-## Deployment (Render)
+## Deployment (Railway)
 
-The project deploys to Render as a daily Cron Job. Config is in `render.yaml` at the project root.
+The project deploys to Railway as a daily Cron Job. Config is in `render.yaml` (kept for reference; Railway auto-detects it on first connect).
 
 ```bash
 # Regenerate requirements.txt after adding/updating dependencies
@@ -71,10 +72,11 @@ uv export --frozen --no-dev -o requirements.txt
 
 **Deploy steps:**
 1. Push to GitHub
-2. Render → New → Blueprint → select repo (auto-detects `render.yaml`)
-3. Set secret env vars in Render dashboard: `OPENAI_API_KEY`, `GROQ_API_KEY`, `MY_EMAIL`, `APP_PASSWORD`
-4. `DATABASE_URL` is injected automatically from the linked Render Postgres
-5. Trigger a manual run to verify
+2. Railway → New Project → Deploy from GitHub repo → select repo
+3. Railway auto-detects `render.yaml` and provisions the cron service + Postgres
+4. Set secret env vars in Railway dashboard: `GROQ_API_KEY`, `OPENAI_API_KEY`, `RESEND_API_KEY`, `MY_EMAIL`
+5. `DATABASE_URL` is injected automatically from the linked Railway Postgres
+6. Trigger a manual run to verify
 
 **Schedule:** `0 7 * * *` (7 AM UTC daily). Edit in `render.yaml` to change.
 
@@ -93,9 +95,9 @@ uv export --frozen --no-dev -o requirements.txt
 
 3. **YouTube Transcripts** (`app/services/process_youtube.py`) — Fetches transcripts for videos stored without one; marks unavailable transcripts as `__UNAVAILABLE__`.
 
-4. **Digest Generation** (`app/services/process_digest.py`) — For each article without a digest, calls `DigestAgent` (gpt-4o-mini) to generate a title + 2-3 sentence summary stored in the `digests` table.
+4. **Digest Generation** (`app/services/process_digest.py`) — For each article without a digest, calls `DigestAgent` (llama-3.3-70b-versatile via Groq) to generate a title + 2-3 sentence summary stored in the `digests` table.
 
-5. **Email** (`app/services/process_email.py`) — Loads the user profile from `app/profiles/`, calls `CuratorAgent` (gpt-4.1) to rank all recent digests, then `EmailAgent` (gpt-4o-mini) to write the intro, and sends via Gmail SMTP.
+5. **Email** (`app/services/process_email.py`) — Loads the user profile from `app/profiles/`, calls `CuratorAgent` (llama-3.3-70b-versatile via Groq) to rank all recent digests, then `EmailAgent` (llama-3.3-70b-versatile via Groq) to write the intro, and sends via Resend API.
 
 ### Key Design Decisions
 
@@ -104,9 +106,11 @@ uv export --frozen --no-dev -o requirements.txt
 - **Anthropic-only full text**: Only Anthropic articles get full-text fetching (via requests + bs4). OpenAI relies on RSS description; YouTube relies on transcripts.
 - **Digest eligibility**: YouTube videos only get digests if they have a non-null, non-`__UNAVAILABLE__` transcript. Anthropic articles only get digests after markdown is populated.
 - **User profiles** (`app/profiles/default_profile.py`): Dicts with keys `name`, `background`, `expertise_level`, `interests` (list), `preferences` (dict). Imported via `app/profiles/__init__.py` as `DEFAULT_PROFILE`. Both `CuratorAgent` and `EmailAgent` receive the profile at construction time.
-- **OpenAI SDK usage**: All agents use `client.responses.parse(...)` with `text_format=<PydanticModel>` for structured output — this is the Responses API, not the Chat Completions API.
+- **LLM provider**: All agents use Groq (`llama-3.3-70b-versatile`) via the OpenAI-compatible SDK (`base_url="https://api.groq.com/openai/v1"`). `OPENAI_API_KEY` is kept as a fallback.
+- **Structured output**: All agents use `client.responses.parse(...)` with `text_format=<PydanticModel>` — this is the OpenAI Responses API pattern, not Chat Completions.
+- **Email provider**: Resend API (`resend` Python SDK). Railway blocks outbound SMTP, so Gmail SMTP was replaced. The sender is `onboarding@resend.dev` (free tier); recipient is `MY_EMAIL`. `APP_PASSWORD` is no longer used.
 - **No docling**: `docling` cannot be installed on Intel Mac (macOS 13 x86_64) due to torch platform incompatibility. Use `requests` + `beautifulsoup4` for URL-to-text extraction instead.
-- **Database connection**: `app/database/connection.py` checks `DATABASE_URL` first (used by Render), then falls back to individual `POSTGRES_*` vars (used locally with Docker).
+- **Database connection**: `app/database/connection.py` checks `DATABASE_URL` first (used by Railway), then falls back to individual `POSTGRES_*` vars (used locally with Docker).
 - **Table creation**: `daily_runner.py` calls `create_tables()` at startup — idempotent, safe to run every day. No manual setup needed on fresh deploys.
 - **Dependency management**: `requirements.txt` is committed and generated via `uv export --frozen --no-dev`. Render uses it; local dev uses `uv sync`.
 

@@ -24,7 +24,7 @@ main.py / daily_runner.py
 [4] process_digest.py      ← DigestAgent generates title + summary per article
         │
         ▼
-[5] process_email.py       ← CuratorAgent ranks → EmailAgent writes intro → Gmail
+[5] process_email.py       ← CuratorAgent ranks → EmailAgent writes intro → Resend
 ```
 
 ---
@@ -89,7 +89,7 @@ Queries all articles that don't yet have a digest (via `Repository.get_articles_
 - Anthropic: must have a non-null `markdown`.
 - OpenAI: always eligible (uses RSS description as content).
 
-For each eligible article, calls `DigestAgent.generate_digest(title, content, article_type)` which calls `gpt-4o-mini` via the OpenAI Responses API and returns a `DigestOutput(title, summary)`. The result is inserted into the `digests` table with `created_at` set to the source article's `published_at`.
+For each eligible article, calls `DigestAgent.generate_digest(title, content, article_type)` which calls `llama-3.3-70b-versatile` via the Groq API (OpenAI-compatible SDK) and returns a `DigestOutput(title, summary)`. The result is inserted into the `digests` table with `created_at` set to the source article's `published_at`.
 
 Digest IDs are composite strings: `"{article_type}:{article_id}"` (e.g. `"youtube:abc123"`).
 
@@ -99,11 +99,11 @@ Digest IDs are composite strings: `"{article_type}:{article_id}"` (e.g. `"youtub
 
 Two sub-steps:
 
-**Curation** — `CuratorAgent.rank_digests(digests)` receives all recent digests and calls `gpt-4.1` to score each on relevance (0–10) against the user profile. Returns a ranked list of `RankedArticle` objects.
+**Curation** — `CuratorAgent.rank_digests(digests)` receives all recent digests and calls `llama-3.3-70b-versatile` (Groq) to score each on relevance (0–10) against the user profile. Returns a ranked list of `RankedArticle` objects.
 
-**Email generation** — `EmailAgent.generate_introduction(ranked_articles)` calls `gpt-4o-mini` to write a personalized greeting and 2–3 sentence intro previewing the top articles. Then `create_email_digest_response()` assembles the full `EmailDigestResponse`.
+**Email generation** — `EmailAgent.generate_introduction(ranked_articles)` calls `llama-3.3-70b-versatile` (Groq) to write a personalized greeting and 2–3 sentence intro previewing the top articles. Then `create_email_digest_response()` assembles the full `EmailDigestResponse`.
 
-**Sending** — `email_utils.send_email()` sends via Gmail SMTP (port 465 SSL) using `MY_EMAIL` and `APP_PASSWORD` from the environment. The email is sent as both plain-text (markdown) and HTML (rendered via the `markdown` library with custom CSS).
+**Sending** — `email_utils.send_email()` sends via the Resend API using `RESEND_API_KEY`. Sender is `onboarding@resend.dev` (Resend free tier); recipient is `MY_EMAIL`. Gmail SMTP was replaced because Railway blocks outbound SMTP. The email is sent as both plain-text (markdown) and HTML (rendered via the `markdown` library with custom CSS).
 
 ---
 
@@ -124,19 +124,19 @@ YouTube shorts (URLs containing `/shorts/`) are skipped during scraping.
 ## AI Agents (`app/agent/`)
 
 ### [digest_agent.py](app/agent/digest_agent.py) — `DigestAgent`
-- Model: `gpt-4o-mini`
+- Model: `llama-3.3-70b-versatile` via Groq (`base_url="https://api.groq.com/openai/v1"`)
 - Input: article title + content (truncated to 8,000 chars)
 - Output: `DigestOutput(title: str, summary: str)`
-- Uses OpenAI Responses API: `client.responses.parse(..., text_format=DigestOutput)`
+- Uses OpenAI-compatible Responses API: `client.responses.parse(..., text_format=DigestOutput)`
 
 ### [curator_agent.py](app/agent/curator_agent.py) — `CuratorAgent`
-- Model: `gpt-4.1`
+- Model: `llama-3.3-70b-versatile` via Groq
 - Constructed with `user_profile` dict; builds a system prompt embedding name, background, expertise level, interests, and preferences.
 - Input: list of digest dicts (id, title, summary, type)
 - Output: `List[RankedArticle]` — each with `digest_id`, `rank`, `relevance_score`, `reasoning`
 
 ### [email_agent.py](app/agent/email_agent.py) — `EmailAgent`
-- Model: `gpt-4o-mini`
+- Model: `llama-3.3-70b-versatile` via Groq
 - Constructed with `user_profile` dict.
 - Input: top-N `RankedArticle` objects
 - Output: `EmailIntroduction(greeting, introduction)` — assembled into `EmailDigestResponse`
@@ -147,7 +147,7 @@ YouTube shorts (URLs containing `/shorts/`) are skipped during scraping.
 ## Database (`app/database/`)
 
 ### [connection.py](app/database/connection.py)
-Reads `POSTGRES_*` env vars, builds the SQLAlchemy engine and `SessionLocal` factory. `get_session()` returns a new session.
+Checks `DATABASE_URL` first (injected by Railway); falls back to individual `POSTGRES_*` env vars for local Docker dev. Builds the SQLAlchemy engine and `SessionLocal` factory. `get_session()` returns a new session.
 
 ### [models.py](app/database/models.py)
 Four SQLAlchemy ORM models:
@@ -218,7 +218,7 @@ Each service module has an `if __name__ == "__main__"` block so it can be run st
 
 ## Email Utilities (`app/services/email_utils.py`)
 
-- `send_email(subject, body_text, body_html, recipients)` — SMTP send via Gmail SSL.
+- `send_email(subject, body_text, body_html, recipients)` — sends via Resend API using `RESEND_API_KEY`. Sender: `onboarding@resend.dev`; recipient defaults to `MY_EMAIL`.
 - `digest_to_html(digest_response)` — renders `EmailDigestResponse` to a styled HTML email; falls back to `markdown_to_html()` for other types.
 - `markdown_to_html(markdown_text)` — wraps rendered markdown in a full HTML document with inline CSS.
 
@@ -230,10 +230,12 @@ All secrets are loaded from `.env` in the project root (copy from `docker/exampl
 
 | Variable | Used By |
 |---|---|
-| `OPENAI_API_KEY` | All three agents |
-| `POSTGRES_USER/PASSWORD/DB/HOST/PORT` | `app/database/connection.py` |
-| `MY_EMAIL` | Sender address and default recipient |
-| `APP_PASSWORD` | Gmail App Password for SMTP auth |
+| `GROQ_API_KEY` | All three agents (primary LLM provider) |
+| `OPENAI_API_KEY` | All three agents (fallback) |
+| `DATABASE_URL` | `app/database/connection.py` (Railway injects this automatically) |
+| `POSTGRES_USER/PASSWORD/DB/HOST/PORT` | `app/database/connection.py` (local Docker fallback) |
+| `MY_EMAIL` | Default digest recipient |
+| `RESEND_API_KEY` | `app/services/email_utils.py` — Resend API for email delivery |
 | `PROXY_USERNAME` / `PROXY_PASSWORD` | Optional Webshare proxy for YouTube transcripts |
 
 ---
@@ -275,5 +277,5 @@ process_anthropic.py      process_youtube.py
         │                    │
         └──────────┬─────────┘
                    ▼
-           Gmail SMTP → inbox
+           Resend API → inbox
 ```
