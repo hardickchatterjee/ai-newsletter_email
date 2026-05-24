@@ -1,15 +1,13 @@
 import os
-import smtplib
 import html
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 import markdown
+import resend
 
 load_dotenv()
 
 MY_EMAIL = os.getenv("MY_EMAIL")
-APP_PASSWORD = os.getenv("APP_PASSWORD")
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 
 
 def send_email(subject: str, body_text: str, body_html: str = None, recipients: list = None):
@@ -17,31 +15,26 @@ def send_email(subject: str, body_text: str, body_html: str = None, recipients: 
         if not MY_EMAIL:
             raise ValueError("MY_EMAIL environment variable is not set")
         recipients = [MY_EMAIL]
-    
+
     recipients = [r for r in recipients if r is not None]
     if not recipients:
         raise ValueError("No valid recipients provided")
-    
-    if not MY_EMAIL:
-        raise ValueError("MY_EMAIL environment variable is not set")
-    if not APP_PASSWORD:
-        raise ValueError("APP_PASSWORD environment variable is not set")
-    
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = MY_EMAIL
-    msg["To"] = ", ".join(recipients)
-    
-    part1 = MIMEText(body_text, "plain")
-    msg.attach(part1)
-    
+
+    if not RESEND_API_KEY:
+        raise ValueError("RESEND_API_KEY environment variable is not set")
+
+    resend.api_key = RESEND_API_KEY
+
+    params: resend.Emails.SendParams = {
+        "from": "AI News Digest <onboarding@resend.dev>",
+        "to": recipients,
+        "subject": subject,
+        "text": body_text,
+    }
     if body_html:
-        part2 = MIMEText(body_html, "html")
-        msg.attach(part2)
-    
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-        smtp.login(MY_EMAIL, APP_PASSWORD)
-        smtp.sendmail(MY_EMAIL, recipients, msg.as_string())
+        params["html"] = body_html
+
+    resend.Emails.send(params)
 
 
 def markdown_to_html(markdown_text: str) -> str:

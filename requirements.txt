@@ -208,7 +208,12 @@ requests==2.34.2 \
     --hash=sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed
     # via
     #   ai-news-aggregator
+    #   resend
     #   youtube-transcript-api
+resend==2.30.1 \
+    --hash=sha256:45da25b86940307e130f8a44d2bac889574362400843e9cd98b49b79a7b3db63 \
+    --hash=sha256:a529a019e83be285d855ecf135475dc6a6b9fa1c24f9b710686988e021a535ec
+    # via ai-news-aggregator
 sgmllib3k==1.0.0 \
     --hash=sha256:7868fb1c8bfa764c1ac563d3cf369c381d1325d36124933a726f29fcdaa812e9
     # via feedparser
@@ -249,6 +254,7 @@ typing-extensions==4.15.0 \
     #   openai
     #   pydantic
     #   pydantic-core
+    #   resend
     #   sqlalchemy
     #   typing-inspection
 typing-inspection==0.4.2 \
