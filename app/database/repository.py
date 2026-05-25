@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
-from .models import YouTubeVideo, OpenAIArticle, AnthropicArticle, Digest
+from .models import YouTubeVideo, OpenAIArticle, AnthropicArticle, Digest, User, UserYouTubeChannel
 from .connection import get_session
 
 
@@ -201,7 +201,7 @@ class Repository:
         
         return articles
     
-    def create_digest(self, article_type: str, article_id: str, url: str, title: str, summary: str, published_at: Optional[datetime] = None) -> Optional[Digest]:
+    def create_digest(self, article_type: str, article_id: str, url: str, title: str, summary: str, published_at: Optional[datetime] = None, channel_id: Optional[str] = None) -> Optional[Digest]:
         digest_id = f"{article_type}:{article_id}"
         existing = self.session.query(Digest).filter_by(id=digest_id).first()
         if existing:
@@ -221,6 +221,7 @@ class Repository:
             url=url,
             title=title,
             summary=summary,
+            channel_id=channel_id,
             created_at=created_at
         )
         self.session.add(digest)
@@ -241,7 +242,69 @@ class Repository:
                 "url": d.url,
                 "title": d.title,
                 "summary": d.summary,
+                "channel_id": d.channel_id,
                 "created_at": d.created_at
             }
             for d in digests
         ]
+
+    # --- User methods ---
+
+    def create_user(self, email: str, name: str, password_hash: str) -> Optional[User]:
+        if self.session.query(User).filter_by(email=email).first():
+            return None
+        user = User(email=email, name=name, password_hash=password_hash)
+        self.session.add(user)
+        self.session.commit()
+        return user
+
+    def get_user_by_email(self, email: str) -> Optional[User]:
+        return self.session.query(User).filter_by(email=email).first()
+
+    def get_user_by_id(self, user_id) -> Optional[User]:
+        return self.session.query(User).filter_by(id=user_id).first()
+
+    def update_user_profile(self, user_id, **kwargs) -> bool:
+        user = self.session.query(User).filter_by(id=user_id).first()
+        if not user:
+            return False
+        for key, value in kwargs.items():
+            if hasattr(user, key):
+                setattr(user, key, value)
+        self.session.commit()
+        return True
+
+    def get_all_active_users(self) -> List[User]:
+        return self.session.query(User).filter_by(is_active=True).all()
+
+    # --- User channel methods ---
+
+    def add_user_channel(self, user_id, channel_id: str, channel_name: Optional[str] = None) -> Optional[UserYouTubeChannel]:
+        existing = self.session.query(UserYouTubeChannel).filter_by(user_id=user_id, channel_id=channel_id).first()
+        if existing:
+            return None
+        channel = UserYouTubeChannel(user_id=user_id, channel_id=channel_id, channel_name=channel_name)
+        self.session.add(channel)
+        self.session.commit()
+        return channel
+
+    def remove_user_channel(self, user_id, channel_id: str) -> bool:
+        channel = self.session.query(UserYouTubeChannel).filter_by(user_id=user_id, channel_id=channel_id).first()
+        if not channel:
+            return False
+        self.session.delete(channel)
+        self.session.commit()
+        return True
+
+    def get_user_channels(self, user_id) -> List[UserYouTubeChannel]:
+        return self.session.query(UserYouTubeChannel).filter_by(user_id=user_id).all()
+
+    def get_all_active_channel_ids(self) -> List[str]:
+        rows = (
+            self.session.query(UserYouTubeChannel.channel_id)
+            .join(User, User.id == UserYouTubeChannel.user_id)
+            .filter(User.is_active == True)
+            .distinct()
+            .all()
+        )
+        return [r.channel_id for r in rows]
