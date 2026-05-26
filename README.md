@@ -1,6 +1,6 @@
 # 🗞️ AI News Aggregator
 
-> I got tired of manually checking OpenAI, Anthropic, and YouTube every morning for AI updates. So I built a pipeline that does it for me — scrapes, summarizes, ranks by my interests, and emails me a personalized digest every day at 7 AM.
+> I got tired of manually checking OpenAI blogs, Anthropic, YouTube channels I like every morning for AI updates. So I built a pipeline that does it for me — scrapes, summarizes, ranks by my interests, and emails me a personalized digest every day at 7 AM.
 
 A production multi-agent pipeline built with three specialized LLM agents, PostgreSQL, and deployed as a Railway cron job. Not a wrapper — a real automated system that runs daily without any manual intervention.
 
