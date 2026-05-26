@@ -1,6 +1,24 @@
-# AI News Aggregator
+# 🗞️ AI News Aggregator
 
-A personalized AI news digest pipeline that scrapes content from YouTube, OpenAI, and Anthropic, summarizes it with an LLM, and emails you a curated daily briefing tailored to your interests.
+> I got tired of manually checking OpenAI, Anthropic, and YouTube every morning for AI updates. So I built a pipeline that does it for me — scrapes, summarizes, ranks by my interests, and emails me a personalized digest every day at 7 AM.
+
+A production multi-agent pipeline built with three specialized LLM agents, PostgreSQL, and deployed as a Railway cron job. Not a wrapper — a real automated system that runs daily without any manual intervention.
+
+---
+
+## 🧠 How It's Built
+
+Three specialized agents handle distinct responsibilities:
+
+| Agent | Role |
+|---|---|
+| `DigestAgent` | Reads each raw article/transcript → generates a title + 2–3 sentence summary |
+| `CuratorAgent` | Scores and ranks all digests against your interest profile |
+| `EmailAgent` | Writes a personalized intro and assembles the final email |
+
+Each agent is isolated — single responsibility, single prompt, testable independently.
+
+---
 
 ## How it works
 
