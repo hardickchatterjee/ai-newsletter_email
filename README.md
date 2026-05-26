@@ -1,10 +1,12 @@
 # AI News Aggregator
 
-A personalized AI news digest pipeline that scrapes content from YouTube, OpenAI, and Anthropic, summarizes it with an LLM, and emails you a curated daily briefing tailored to your interests.
+A personalized AI news digest platform that scrapes content from YouTube, OpenAI, and Anthropic, summarizes it with an LLM, and emails each user a curated daily briefing tailored to their interests.
+
+Users sign up via a web app, configure their YouTube channels and interests, and receive a personalized digest every morning.
 
 ## How it works
 
-The pipeline runs five sequential steps each day:
+### Daily pipeline
 
 ```
 Scrape → Fetch full text → Fetch transcripts → Generate digests → Curate & email
@@ -14,9 +16,16 @@ Scrape → Fetch full text → Fetch transcripts → Generate digests → Curate
 2. **Anthropic full text** — Fetches and cleans the full HTML of each Anthropic article into markdown.
 3. **YouTube transcripts** — Fetches transcripts for each video via `youtube-transcript-api`.
 4. **Digest generation** — For each undigested article, calls an LLM to produce a title + 2–3 sentence summary.
-5. **Curate & email** — LLM ranks digests by your profile interests, writes a personalised intro, and sends via [Resend](https://resend.com).
+5. **Curate & email** — For each active user, the LLM ranks digests by their profile interests, writes a personalised intro, and sends via [Resend](https://resend.com).
 
 All steps are idempotent — safe to re-run at any time; already-processed records are skipped.
+
+### Web app
+
+Users manage their account at `http://localhost:8000`:
+- Sign up / log in (email + password, JWT in HTTP-only cookie)
+- Edit profile: name, background, expertise level, interests
+- Add / remove YouTube channels (resolved by name from RSS)
 
 ---
 
@@ -66,6 +75,7 @@ Edit `.env` and fill in your credentials:
 | `OPENAI_API_KEY` | OpenAI API key — fallback if Groq is unavailable |
 | `MY_EMAIL` | Your email address — where the digest is delivered |
 | `RESEND_API_KEY` | [Resend](https://resend.com) API key for email delivery |
+| `SECRET_KEY` | Secret for signing JWTs — generate with `python -c "import secrets; print(secrets.token_hex(32))"` |
 | `POSTGRES_USER` | DB username (default: `postgres`) |
 | `POSTGRES_PASSWORD` | DB password (default: `postgres`) |
 | `POSTGRES_DB` | DB name (default: `ai_news_aggregator`) |
@@ -75,7 +85,15 @@ Edit `.env` and fill in your credentials:
 
 > **Resend free tier note:** Without a verified domain, emails are sent from `onboarding@resend.dev` and can only be delivered to your own Resend account email. This is fine for personal use.
 
-### 4. Run the pipeline
+### 4. Start the web app
+
+```bash
+uvicorn app.web.app:app --reload
+```
+
+Open `http://localhost:8000`, sign up, and configure your channels and interests.
+
+### 5. Run the pipeline
 
 ```bash
 python -m app.daily_runner
@@ -87,30 +105,9 @@ Tables are created automatically on first run. No manual setup needed.
 
 ## Personalisation
 
-Edit `app/profiles/user_profile.py` to match your background and interests. Both the curator (ranking) and email agent (intro) use this profile to tailor the output.
+User profiles and YouTube channels are managed through the web app dashboard. No file editing needed.
 
-```python
-DEFAULT_PROFILE = {
-    "name": "Your Name",
-    "background": "Software engineer working on AI applications",
-    "expertise_level": "Intermediate to Advanced",
-    "interests": ["LLMs", "AI agents", "Developer tools", ...],
-    "preferences": {
-        "content_depth": "Technical but accessible",
-        "content_type": "Mix of research and practical applications",
-        "format": "Concise summaries with key takeaways",
-    },
-}
-```
-
-To change which YouTube channels are scraped, edit `app/config.py`:
-
-```python
-YOUTUBE_CHANNELS = [
-    "UCawZsQWqfGSbCI5yjkdVkTA",  # Matthew Berman
-    # add more channel IDs here
-]
-```
+The pipeline reads each active user's profile from the database and sends them a personalized digest. The fallback channel list in `app/config.py` is used only if no users have added channels yet.
 
 ---
 
@@ -123,6 +120,14 @@ python app/services/process_youtube.py     # fetch YouTube transcripts
 python app/services/process_digest.py      # generate digests
 python app/services/process_email.py       # curate and send email
 ```
+
+## Tests
+
+```bash
+uv run pytest tests/ -v
+```
+
+Tests cover the web auth and dashboard flows (signup, login, logout, dashboard access). They run against the local PostgreSQL instance and clean up test data automatically.
 
 ---
 
