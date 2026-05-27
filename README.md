@@ -8,15 +8,17 @@ Users sign up via a web app, configure their YouTube channels and interests, and
 
 ### Daily pipeline
 
+The pipeline is a **LangGraph `StateGraph`** with five nodes running in sequence:
+
 ```
-Scrape → Fetch full text → Fetch transcripts → Generate digests → Curate & email
+scrape → process → digest → send_email → finalize
 ```
 
-1. **Scrape** — Pulls RSS feeds from YouTube channels, openai.com/news, and Anthropic (news/research/engineering). Stores raw articles in PostgreSQL.
-2. **Anthropic full text** — Fetches and cleans the full HTML of each Anthropic article into markdown.
-3. **YouTube transcripts** — Fetches transcripts for each video via `youtube-transcript-api`.
-4. **Digest generation** — For each undigested article, calls an LLM to produce a title + 2–3 sentence summary.
-5. **Curate & email** — For each active user, the LLM ranks digests by their profile interests, writes a personalised intro, and sends via [Resend](https://resend.com).
+1. **scrape** — Pulls RSS feeds from YouTube channels, openai.com/news, and Anthropic (news/research/engineering). Stores raw articles in PostgreSQL.
+2. **process** — Two enrichment steps: fetches full HTML of each Anthropic article into markdown, and fetches transcripts for YouTube videos via `youtube-transcript-api`.
+3. **digest** — For each undigested article, `DigestAgent` generates a title + 2–3 sentence summary. `JudgeAgent` scores quality (0–1); only summaries scoring ≥ 0.7 are stored.
+4. **send_email** — For each active user: `CuratorAgent` ranks digests by their profile interests, `EmailAgent` writes a personalised intro, sends via [Resend](https://resend.com), and records sent digest IDs to prevent duplicates.
+5. **finalize** — Assembles the success flag from error counts.
 
 All steps are idempotent — safe to re-run at any time; already-processed records are skipped.
 
@@ -101,6 +103,12 @@ python -m app.daily_runner
 
 Tables are created automatically on first run. No manual setup needed.
 
+**Quick test run** (cap each stage to 2 items, last 24 h only):
+
+```bash
+python -m app.daily_runner --hours 24 --limit 2
+```
+
 ---
 
 ## Personalisation
@@ -171,11 +179,20 @@ app/
 │   ├── youtube.py           # YouTube RSS + transcript fetching
 │   ├── openai.py            # OpenAI RSS scraper
 │   └── anthropic.py         # Anthropic RSS scraper + full-text fetching
+├── pipeline/
+│   ├── state.py             # PipelineState TypedDict shared across all nodes
+│   ├── workflow.py          # LangGraph StateGraph definition
+│   └── nodes/
+│       ├── scrape.py        # Node: RSS scraping
+│       ├── process.py       # Node: full-text + transcript enrichment
+│       ├── digest.py        # Node: LLM digest generation
+│       ├── email.py         # Node: per-user curation and sending
+│       └── finalize.py      # Node: success flag assembly
 ├── services/
 │   ├── process_anthropic.py # Full-text enrichment for Anthropic articles
 │   ├── process_youtube.py   # Transcript fetching for YouTube videos
 │   ├── process_digest.py    # Digest generation orchestration
-│   ├── process_email.py     # Email curation and sending
+│   ├── process_email.py     # Per-user email curation and sending
 │   └── email_utils.py       # Resend API wrapper + HTML rendering
 ├── web/
 │   ├── app.py               # FastAPI factory
@@ -210,6 +227,7 @@ docker/
 | Database | PostgreSQL via SQLAlchemy ORM + psycopg2 |
 | Web framework | FastAPI + Jinja2 (server-side rendered) |
 | Auth | bcrypt passwords, JWT in HTTP-only cookie (`python-jose`) |
+| Pipeline orchestration | LangGraph `StateGraph` |
 | LLM | Groq (`llama-3.3-70b-versatile`) via OpenAI-compatible SDK |
 | Scraping | `feedparser`, `requests`, `beautifulsoup4` |
 | Transcripts | `youtube-transcript-api` |
