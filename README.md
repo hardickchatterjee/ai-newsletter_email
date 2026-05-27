@@ -133,12 +133,14 @@ Tests cover the web auth and dashboard flows (signup, login, logout, dashboard a
 
 ## Deployment (Railway)
 
-The pipeline deploys to [Railway](https://railway.app) as a daily cron job.
+Two Railway services share the same Postgres instance:
+- **web** — FastAPI app served by uvicorn
+- **cron** — daily pipeline runner at 7 AM UTC
 
 1. Push to GitHub
 2. Railway → New Project → Deploy from GitHub repo
-3. Railway auto-detects `render.yaml` and provisions the cron service + Postgres
-4. Add env vars in Railway dashboard: `GROQ_API_KEY`, `OPENAI_API_KEY`, `RESEND_API_KEY`, `MY_EMAIL`
+3. Railway auto-detects `render.yaml` and provisions both services + Postgres
+4. Add env vars in Railway dashboard: `GROQ_API_KEY`, `OPENAI_API_KEY`, `RESEND_API_KEY`, `MY_EMAIL`, `SECRET_KEY`
 5. `DATABASE_URL` is injected automatically from the linked Postgres service
 6. Trigger a manual run to verify
 
@@ -161,7 +163,7 @@ app/
 │   ├── curator_agent.py     # LLM: ranks digests by user profile
 │   └── email_agent.py       # LLM: writes personalized email intro
 ├── database/
-│   ├── models.py            # SQLAlchemy ORM models
+│   ├── models.py            # SQLAlchemy ORM models (includes User, UserYouTubeChannel)
 │   ├── repository.py        # All DB reads and writes
 │   ├── connection.py        # Engine + session (DATABASE_URL → POSTGRES_* fallback)
 │   └── create_tables.py     # Idempotent table creation
@@ -175,10 +177,24 @@ app/
 │   ├── process_digest.py    # Digest generation orchestration
 │   ├── process_email.py     # Email curation and sending
 │   └── email_utils.py       # Resend API wrapper + HTML rendering
+├── web/
+│   ├── app.py               # FastAPI factory
+│   ├── auth.py              # bcrypt hashing, JWT create/verify, get_current_user
+│   ├── dependencies.py      # DB session dependency
+│   ├── routes/
+│   │   ├── auth.py          # GET/POST /signup, /login, /logout
+│   │   └── dashboard.py     # GET /dashboard, POST /settings, /channels/add, /channels/remove
+│   └── templates/
+│       ├── base.html        # Tailwind CDN layout
+│       ├── signup.html
+│       ├── login.html
+│       └── dashboard.html
 ├── profiles/
-│   └── user_profile.py      # Your interests and preferences
+│   └── user_profile.py      # Fallback profile (used when no DB users exist)
 ├── runner.py                # Scraping entry point
 └── daily_runner.py          # Full pipeline orchestrator
+tests/
+└── test_web.py              # Phase 2 auth + dashboard tests (pytest)
 docker/
 ├── docker-compose.yaml
 └── example.env
@@ -192,8 +208,11 @@ docker/
 |---|---|
 | Language | Python 3.14, managed with `uv` |
 | Database | PostgreSQL via SQLAlchemy ORM + psycopg2 |
+| Web framework | FastAPI + Jinja2 (server-side rendered) |
+| Auth | bcrypt passwords, JWT in HTTP-only cookie (`python-jose`) |
 | LLM | Groq (`llama-3.3-70b-versatile`) via OpenAI-compatible SDK |
 | Scraping | `feedparser`, `requests`, `beautifulsoup4` |
 | Transcripts | `youtube-transcript-api` |
 | Email | [Resend](https://resend.com) API |
-| Deployment | [Railway](https://railway.app) cron job |
+| Testing | pytest + httpx (TestClient) |
+| Deployment | [Railway](https://railway.app) — web service + cron job |

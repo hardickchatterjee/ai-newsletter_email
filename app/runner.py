@@ -1,20 +1,26 @@
-from typing import List
-from .config import YOUTUBE_CHANNELS
+from typing import List, Optional
+from .config import DEFAULT_YOUTUBE_CHANNELS
 from .scrapers.youtube import YouTubeScraper, ChannelVideo
 from .scrapers.openai import OpenAIScraper, OpenAIArticle
 from .scrapers.anthropic import AnthropicScraper, AnthropicArticle
 from .database.repository import Repository
 
 
-def run_scrapers(hours: int = 24) -> dict:
+def run_scrapers(hours: int = 24, channel_ids: Optional[List[str]] = None) -> dict:
     youtube_scraper = YouTubeScraper()
     openai_scraper = OpenAIScraper()
     anthropic_scraper = AnthropicScraper()
     repo = Repository()
-    
+
+    effective_channels = channel_ids
+    if not effective_channels:
+        effective_channels = repo.get_all_active_channel_ids()
+    if not effective_channels:
+        effective_channels = DEFAULT_YOUTUBE_CHANNELS
+
     youtube_videos = []
     video_dicts = []
-    for channel_id in YOUTUBE_CHANNELS:
+    for channel_id in effective_channels:
         videos = youtube_scraper.get_latest_videos(channel_id, hours=hours)
         youtube_videos.extend(videos)
         video_dicts.extend([

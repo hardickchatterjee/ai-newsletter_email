@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
-from .models import YouTubeVideo, OpenAIArticle, AnthropicArticle, Digest, User, UserYouTubeChannel
+from .models import YouTubeVideo, OpenAIArticle, AnthropicArticle, Digest, User, UserYouTubeChannel, UserDigestSend
 from .connection import get_session
 
 
@@ -308,3 +308,38 @@ class Repository:
             .all()
         )
         return [r.channel_id for r in rows]
+
+    # --- Email send tracking ---
+
+    def get_unsent_digests_for_user(
+        self,
+        user_id,
+        hours: int = 240,
+        channel_ids: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
+        all_digests = self.get_recent_digests(hours=hours)
+        sent_ids = {
+            row.digest_id
+            for row in self.session.query(UserDigestSend).filter_by(user_id=user_id).all()
+        }
+        result = []
+        for d in all_digests:
+            if d["id"] in sent_ids:
+                continue
+            if channel_ids is not None and d["article_type"] == "youtube":
+                if d["channel_id"] not in channel_ids:
+                    continue
+            result.append(d)
+        return result
+
+    def mark_digests_sent(self, user_id, digest_ids: List[str]) -> int:
+        count = 0
+        for digest_id in digest_ids:
+            existing = self.session.query(UserDigestSend).filter_by(
+                user_id=user_id, digest_id=digest_id
+            ).first()
+            if not existing:
+                self.session.add(UserDigestSend(user_id=user_id, digest_id=digest_id))
+                count += 1
+        self.session.commit()
+        return count

@@ -6,8 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "cd /Users/hardickchatterjee/ai-news-aggregator && uv run python -m py_compile app/scrapers/anthropic.py app/scrapers/openai.py app/scrapers/youtube.py",
-            "statusMessage": "Checking scraper syntax... hook 1"
+            "command": "cd /Users/hardickchatterjee/ai-news-aggregator && uv run python -m py_compile app/scrapers/anthropic.py app/scrapers/openai.py app/scrapers/youtube.py && pytest tests/test_web.py",
+            "statusMessage": "Running main pipelines and test suites... hook 1"
           }
         ]
       }

@@ -1,4 +1,4 @@
-YOUTUBE_CHANNELS = [
+DEFAULT_YOUTUBE_CHANNELS = [
     # "UCn8ujwUInbJkBhffxqAPBVQ", # Dave Ebbelaar
     "UCawZsQWqfGSbCI5yjkdVkTA", # Matthew Berman
     "UCVMe_3tsQam1PuNNbHRgIHQ", # AI Explained

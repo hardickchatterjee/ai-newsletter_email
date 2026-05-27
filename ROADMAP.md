@@ -158,3 +158,32 @@ cronSchedule = "0 7 * * *"
 - Payment/subscription gating
 - LLM-as-a-judge for digest quality scoring
 - Temporal for workflow orchestration
+
+
+
+
+
+
+//
+What was done — and why
+1. LangGraph Workflow
+What: The old daily_runner.py was a flat sequence of try/except blocks calling each service step. It's now a StateGraph defined in app/pipeline/workflow.py.
+
+How it works: LangGraph passes a shared PipelineState TypedDict between nodes. Each node receives the full state, does its work, and returns a partial dict — LangGraph merges the returned keys back in. The graph is compiled once at module load (pipeline_graph = build_pipeline_graph()) and invoked with pipeline_graph.invoke(initial_state).
+
+Why it's better: Each step is now an isolated, composable unit. If a node raises an exception, the error is captured in state["errors"] and the next node still runs — unlike before, where one exception would abort the whole pipeline.
+
+2. LLM-as-a-Judge (JudgeAgent)
+What: After DigestAgent generates a summary, a second LLM call (JudgeAgent) independently scores it from 0–1 on accuracy, completeness, clarity, length, and absence of hallucinations. Only summaries scoring ≥ 0.7 are stored.
+
+How it works: The judge uses temperature=0.1 (near-deterministic) and evaluates the original article content alongside the generated summary. Articles that fail remain "without digest" in the DB and are retried on the next daily run.
+
+Why it matters: Without this, a vague or hallucinated summary could end up in a user's inbox. The judge acts as a quality filter between generation and storage.
+
+3. Email Idempotency (user_digest_sends)
+What: A new user_digest_sends table with a composite primary key (user_id, digest_id). Before sending, get_unsent_digests_for_user() filters out any digests already in that table. After sending, mark_digests_sent() records exactly which digest IDs were included.
+
+Key nuance: Only articles actually included in the email (up to top_n) are marked as sent — not everything that was curated. So if an article was ranked 11th today and fell below the cutoff, it stays available for tomorrow's email.
+
+4. Phase 3 Multi-User
+What: The send_email node loops over every active user from the DB. Per-user logic: YouTube digests are filtered to channels the user has subscribed to (via user_youtube_channels). The channel list for scraping also comes from the DB now, falling back to DEFAULT_YOUTUBE_CHANNELS only if no users have added channels.

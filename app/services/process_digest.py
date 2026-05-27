@@ -9,7 +9,7 @@ load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from app.agent.digest_agent import DigestAgent
+from app.agent.digest_agent import DigestAgent, JudgeAgent
 from app.database.repository import Repository
 
 logging.basicConfig(
@@ -22,22 +22,23 @@ logger = logging.getLogger(__name__)
 
 def process_digests(limit: Optional[int] = None) -> dict:
     agent = DigestAgent()
+    judge = JudgeAgent()
     repo = Repository()
-    
+
     articles = repo.get_articles_without_digest(limit=limit)
     total = len(articles)
     processed = 0
     failed = 0
-    
+
     logger.info(f"Starting digest processing for {total} articles")
-    
+
     for idx, article in enumerate(articles, 1):
         article_type = article["type"]
         article_id = article["id"]
         article_title = article["title"][:60] + "..." if len(article["title"]) > 60 else article["title"]
-        
+
         logger.info(f"[{idx}/{total}] Processing {article_type}: {article_title} (ID: {article_id})")
-        
+
         try:
             digest_result = agent.generate_digest(
                 title=article["title"],
@@ -45,28 +46,50 @@ def process_digests(limit: Optional[int] = None) -> dict:
                 article_type=article_type
             )
 
-            if digest_result:
-                repo.create_digest(
-                    article_type=article_type,
-                    article_id=article_id,
-                    url=article["url"],
-                    title=digest_result.title,
-                    summary=digest_result.summary,
-                    published_at=article.get("published_at")
-                )
-                processed += 1
-                logger.info(f"✓ Successfully created digest for {article_type} {article_id}")
-            else:
+            if not digest_result:
                 failed += 1
                 logger.warning(f"✗ Failed to generate digest for {article_type} {article_id}")
+                time.sleep(1)
+                continue
+
+            judgment = judge.judge(
+                original_title=article["title"],
+                original_content=article["content"],
+                digest_title=digest_result.title,
+                digest_summary=digest_result.summary,
+                article_type=article_type,
+            )
+
+            if judgment is None or not judgment.passed:
+                score_str = f"{judgment.score:.2f}" if judgment else "N/A"
+                logger.warning(
+                    f"✗ Digest failed quality check (score={score_str}) for "
+                    f"{article_type} {article_id}: "
+                    f"{judgment.reasoning if judgment else 'judge returned None'}"
+                )
+                failed += 1
+                time.sleep(1)
+                continue
+
+            logger.info(f"  Quality score: {judgment.score:.2f} — {judgment.reasoning}")
+            repo.create_digest(
+                article_type=article_type,
+                article_id=article_id,
+                url=article["url"],
+                title=digest_result.title,
+                summary=digest_result.summary,
+                published_at=article.get("published_at")
+            )
+            processed += 1
+            logger.info(f"✓ Successfully created digest for {article_type} {article_id}")
         except Exception as e:
             failed += 1
             logger.error(f"✗ Error processing {article_type} {article_id}: {e}")
 
         time.sleep(1)
-    
+
     logger.info(f"Processing complete: {processed} processed, {failed} failed out of {total} total")
-    
+
     return {
         "total": total,
         "processed": processed,

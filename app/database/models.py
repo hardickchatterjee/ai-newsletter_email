@@ -90,3 +90,11 @@ class UserYouTubeChannel(Base):
     user = relationship("User", back_populates="channels")
 
     __table_args__ = (UniqueConstraint("user_id", "channel_id", name="uq_user_channel"),)
+
+
+class UserDigestSend(Base):
+    __tablename__ = "user_digest_sends"
+
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    digest_id = Column(String, ForeignKey("digests.id", ondelete="CASCADE"), primary_key=True)
+    sent_at = Column(DateTime, default=datetime.utcnow, nullable=False)
