@@ -114,17 +114,19 @@ scrape → process → digest → send_email → finalize
 - **RSS fetching pattern**: All scrapers fetch RSS content via `requests` first, then pass `response.content` to `feedparser.parse()`. Direct URL parsing via feedparser fails silently on this platform.
 - **Anthropic-only full text**: Only Anthropic articles get full-text fetching (via requests + bs4). OpenAI relies on RSS description; YouTube relies on transcripts.
 - **Digest eligibility**: YouTube videos only get digests if they have a non-null, non-`__UNAVAILABLE__` transcript. Anthropic articles only get digests after markdown is populated.
-- **Auth**: bcrypt via the `bcrypt` package directly (not passlib — passlib is broken on Python 3.14). JWTs signed with `python-jose`, stored in HTTP-only cookies with 7-day TTL.
+- **Auth**: bcrypt via the `bcrypt` package directly (not passlib — passlib is broken on Python 3.14). JWTs signed with `python-jose`, stored in HTTP-only cookies with 7-day TTL. Signup sends a verification email (token in `users.email_verification_token`) and renders `signup_confirmation.html`; the user is NOT logged in at this point. Login refuses (`403`) until `users.email_verified` is `True`. Verification link `/verify-email/{token}` clears the token and flips the flag. Password reset flow lives at `/forgot-password` → emailed link → `/reset-password/{token}`; tokens expire after 24h via `users.password_reset_expires`. Unknown emails on `/forgot-password` still return 200 to avoid account enumeration.
 - **TemplateResponse API**: Starlette 0.29+ changed the signature to `TemplateResponse(request, name, context)` — `request` is the first positional arg and is NOT included in the context dict.
 - **User profiles**: Stored in the `users` DB table. `app/profiles/user_profile.py` is a fallback used only when no active users exist in the DB.
 - **LLM provider**: All agents use Groq (`llama-3.3-70b-versatile`) via the OpenAI-compatible SDK (`base_url="https://api.groq.com/openai/v1"`). `OPENAI_API_KEY` is kept as a fallback.
 - **Structured output**: Agents use `response_format={"type": "json_object"}` with `json.loads()` + Pydantic model construction.
 - **Email provider**: Resend API (`resend` Python SDK). Railway blocks outbound SMTP, so Gmail SMTP was replaced. The sender is `onboarding@resend.dev` (free tier); recipient is `MY_EMAIL`.
+- **Resend free-tier limitation**: With the unpaid Resend account you can ONLY send to the single verified address attached to the account (`MY_EMAIL`). Signup-verification and password-reset emails to *any other recipient* will fail with `"You can only send testing emails to your own email address..."`. To support real signups, verify a domain at resend.com/domains and change the `from` in `app/services/email_utils.py`. Until then, only `MY_EMAIL` can complete the signup flow end-to-end.
 - **No docling**: `docling` cannot be installed on Intel Mac (macOS 13 x86_64) due to torch platform incompatibility. Use `requests` + `beautifulsoup4` for URL-to-text extraction instead.
 - **Database connection**: `app/database/connection.py` checks `DATABASE_URL` first (used by Railway), then falls back to individual `POSTGRES_*` vars (used locally with Docker).
 - **Table creation**: `daily_runner.py` calls `create_tables()` at startup — idempotent, safe to run every day. No manual setup needed on fresh deploys.
+- **No migrations — schema changes require a drop**: `Base.metadata.create_all()` only creates missing tables; it will NOT add new columns to an existing table. After changing a model (e.g. adding `email_verified` to `User`), drop the affected table(s) (`DROP TABLE ... CASCADE`) and re-run `python app/database/create_tables.py`. Production has no Alembic; data loss is expected on schema changes.
 - **Dependency management**: `requirements.txt` is committed and generated via `uv export --frozen --no-dev`. Railway uses it; local dev uses `uv sync`.
-- **Tests**: `tests/test_web.py` runs against the real PostgreSQL instance (Docker must be up). Each test fixture creates and cleans up its own data.
+- **Tests**: `tests/test_web.py` runs against the real PostgreSQL instance (Docker must be up). A module-level `autouse` fixture (`_cleanup_around_each_test`) deletes test-scoped rows (emails starting with `test_phase2`, digest IDs `youtube:test_video_phase2*`) before AND after every test, so a single failure can't poison the rest of the suite. `send_email` is patched at `app.web.routes.auth.send_email` in tests that hit signup / forgot-password so they don't burn Resend quota. YouTube channel-name resolution is patched at `app.web.routes.dashboard._resolve_channel_name` to skip network calls.
 
 ### Database Schema
 
@@ -133,6 +135,6 @@ Seven tables managed by SQLAlchemy ORM (`app/database/models.py`):
 - `openai_articles` — primary key: `guid`
 - `anthropic_articles` — primary key: `guid`; has `markdown` column populated by step 2
 - `digests` — primary key: `"{article_type}:{article_id}"`; `created_at` is set to the source article's `published_at`; has `channel_id` for YouTube filtering
-- `users` — primary key: UUID; stores email, bcrypt password hash, profile fields
+- `users` — primary key: UUID; stores email, bcrypt password hash, profile fields (`background`, `expertise_level`, `interests` ARRAY, `content_depth`, `content_type`), and auth-flow state: `email_verified` (Boolean, default False — gates login), `email_verification_token` (nullable, cleared on verify), `password_reset_token` + `password_reset_expires` (24h TTL, set by `/forgot-password`, cleared by `/reset-password`)
 - `user_youtube_channels` — join table (user_id + channel_id); UNIQUE constraint prevents duplicates
 - `user_digest_sends` — composite primary key (user_id + digest_id); tracks which digests have been sent to each user to prevent duplicate emails

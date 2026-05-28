@@ -25,9 +25,12 @@ All steps are idempotent — safe to re-run at any time; already-processed recor
 ### Web app
 
 Users manage their account at `http://localhost:8000`:
-- Sign up / log in (email + password, JWT in HTTP-only cookie)
-- Edit profile: name, background, expertise level, interests
+- Sign up with email verification (link emailed via Resend; login is blocked until verified)
+- Log in / log out (email + password, JWT in HTTP-only cookie, 7-day TTL)
+- Forgot-password / reset-password flow (24h token, account-enumeration-safe)
+- Edit profile: name, background, expertise level, interests, content depth, content type
 - Add / remove YouTube channels (resolved by name from RSS)
+- View available digests (last 240h, filtered to your channels) right on the dashboard
 
 ---
 
@@ -85,7 +88,7 @@ Edit `.env` and fill in your credentials:
 | `POSTGRES_PORT` | DB port (default: `5432`) |
 | `PROXY_USERNAME` / `PROXY_PASSWORD` | Optional Webshare proxy for YouTube transcripts |
 
-> **Resend free tier note:** Without a verified domain, emails are sent from `onboarding@resend.dev` and can only be delivered to your own Resend account email. This is fine for personal use.
+> **Resend free tier note:** Without a verified domain, emails are sent from `onboarding@resend.dev` and can only be delivered to the email address attached to your Resend account. This means signup-verification and password-reset emails will only work for that single address — any other signup will create the user row but fail to send the verification email. Verify a domain at [resend.com/domains](https://resend.com/domains) and update the `from` address in `app/services/email_utils.py` to support real signups.
 
 ### 4. Start the web app
 
@@ -135,7 +138,15 @@ python app/services/process_email.py       # curate and send email
 uv run pytest tests/ -v
 ```
 
-Tests cover the web auth and dashboard flows (signup, login, logout, dashboard access). They run against the local PostgreSQL instance and clean up test data automatically.
+50 tests covering:
+- **Auth routes**: signup (success / duplicate / email-send failure), login (verified / unverified / wrong password / unknown email), logout
+- **Email verification**: valid token, invalid token, token cannot be reused
+- **Password reset**: forgot-password (existing / unknown email / email failure), reset-password (valid / mismatched / expired / invalid token)
+- **Dashboard**: render, invalid-JWT redirect, profile update, channel add / remove / dedupe / invalid input, auth-required guards
+- **Repository layer**: user CRUD, verification + reset token lookups (with expiry filtering), channel dedupe, `mark_digests_sent` idempotency, channel-id filtering of unsent digests
+- **Auth helpers**: bcrypt round-trip, JWT encode/decode, tampered-signature rejection
+
+Tests run against the local PostgreSQL instance (Docker must be up). An autouse fixture cleans test rows before and after every test, and `send_email` is patched so the suite never hits Resend.
 
 ---
 
@@ -199,13 +210,19 @@ app/
 │   ├── auth.py              # bcrypt hashing, JWT create/verify, get_current_user
 │   ├── dependencies.py      # DB session dependency
 │   ├── routes/
-│   │   ├── auth.py          # GET/POST /signup, /login, /logout
+│   │   ├── auth.py          # /signup, /login, /logout, /verify-email/{token}, /forgot-password, /reset-password/{token}
 │   │   └── dashboard.py     # GET /dashboard, POST /settings, /channels/add, /channels/remove
 │   └── templates/
-│       ├── base.html        # Tailwind CDN layout
+│       ├── base.html                    # Tailwind CDN layout
 │       ├── signup.html
+│       ├── signup_confirmation.html     # "check your email" page shown after signup
 │       ├── login.html
-│       └── dashboard.html
+│       ├── dashboard.html
+│       ├── verify_email_result.html     # success / failure of /verify-email/{token}
+│       ├── forgot_password.html
+│       ├── forgot_password_sent.html
+│       ├── reset_password.html
+│       └── reset_password_success.html
 ├── profiles/
 │   └── user_profile.py      # Fallback profile (used when no DB users exist)
 ├── runner.py                # Scraping entry point

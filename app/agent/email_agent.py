@@ -115,7 +115,7 @@ Generate a greeting and introduction that previews these articles."""
             print(f"Error generating introduction: {e}")
             return EmailIntroduction(
                 greeting=f"Hey {self.user_profile['name']}, here is your daily digest of AI news for {current_date}.",
-                introduction="Here are the top 10 AI news articles ranked by relevance to your interests."
+                introduction="Here are the top AI news articles ranked by relevance to your interests."
             )
 
     def create_email_digest(self, ranked_articles: List[dict], limit: int = 10) -> EmailDigest:
