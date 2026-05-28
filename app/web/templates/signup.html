@@ -2,40 +2,44 @@
 {% block title %}Sign Up — AI News{% endblock %}
 
 {% block nav %}
-  <a href="/login" class="text-gray-600 hover:text-gray-900">Log in</a>
+  <a href="/login" class="text-gray-600 hover:text-indigo-600 transition dark:text-gray-300 dark:hover:text-indigo-400">Log in</a>
 {% endblock %}
 
 {% block content %}
 <div class="max-w-md mx-auto">
-  <h1 class="text-2xl font-bold mb-6">Create your account</h1>
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold mb-2 dark:text-gray-100">Get started with AI News</h1>
+    <p class="text-gray-600 dark:text-gray-400">Join thousands receiving personalized AI news daily</p>
+  </div>
 
   {% if error %}
-  <div class="mb-4 rounded bg-red-50 border border-red-200 px-4 py-3 text-red-700 text-sm">{{ error }}</div>
+  <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-red-700 text-sm dark:bg-red-900/30 dark:border-red-800 dark:text-red-300">{{ error }}</div>
   {% endif %}
 
-  <form method="post" action="/signup" class="space-y-4">
+  <form method="post" action="/signup" class="space-y-4 bg-white border border-gray-200 rounded-lg p-6 shadow-sm dark:bg-gray-800 dark:border-gray-700">
     <div>
-      <label class="block text-sm font-medium mb-1" for="name">Name</label>
+      <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300" for="name">Full Name</label>
       <input id="name" name="name" type="text" required
-             class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-500" />
     </div>
     <div>
-      <label class="block text-sm font-medium mb-1" for="email">Email</label>
+      <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300" for="email">Email</label>
       <input id="email" name="email" type="email" required
-             class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-500" />
     </div>
     <div>
-      <label class="block text-sm font-medium mb-1" for="password">Password</label>
+      <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300" for="password">Password</label>
       <input id="password" name="password" type="password" required minlength="8"
-             class="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100 dark:placeholder-gray-500" />
+      <p class="text-xs text-gray-500 mt-1 dark:text-gray-400">Must be at least 8 characters</p>
     </div>
     <button type="submit"
-            class="w-full rounded bg-indigo-600 text-white py-2 text-sm font-medium hover:bg-indigo-700 transition">
+            class="w-full rounded-lg bg-indigo-600 text-white py-2 text-sm font-medium hover:bg-indigo-700 transition shadow-sm hover:shadow-md">
       Create account
     </button>
   </form>
-  <p class="mt-4 text-sm text-gray-500 text-center">
-    Already have an account? <a href="/login" class="text-indigo-600 hover:underline">Log in</a>
+  <p class="mt-6 text-sm text-gray-600 text-center dark:text-gray-400">
+    Already a member? <a href="/login" class="text-indigo-600 font-medium hover:text-indigo-700 transition dark:text-indigo-400 dark:hover:text-indigo-300">Log in</a>
   </p>
 </div>
 {% endblock %}

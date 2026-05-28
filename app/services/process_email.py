@@ -160,12 +160,20 @@ def send_digest_email_for_user(user: User, hours: int = 240, top_n: int = 10) ->
     markdown_content = email_digest.to_markdown()
     subject = f"Daily AI News Digest — {datetime.now().strftime('%B %d, %Y')}"
 
-    send_email(
-        subject=subject,
-        body_text=markdown_content,
-        body_html=html_content,
-        recipients=[user.email],
-    )
+    try:
+        send_email(
+            subject=subject,
+            body_text=markdown_content,
+            body_html=html_content,
+            recipients=[user.email],
+        )
+    except Exception as e:
+        logger.error(f"Failed to send email to {user.email}: {e}")
+        return {
+            "success": False,
+            "user": user.email,
+            "error": str(e),
+        }
 
     sent_ids = [a.digest_id for a in email_digest.articles]
     repo.mark_digests_sent(user.id, sent_ids)

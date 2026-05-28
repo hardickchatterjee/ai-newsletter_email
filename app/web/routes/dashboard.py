@@ -48,9 +48,15 @@ async def dashboard(
 ):
     repo = Repository(db)
     channels = repo.get_user_channels(current_user.id)
+    channel_ids = [c.channel_id for c in channels] if channels else None
+    digests = repo.get_unsent_digests_for_user(
+        user_id=current_user.id,
+        hours=240,
+        channel_ids=channel_ids
+    )
     return templates.TemplateResponse(
         request, "dashboard.html",
-        {"user": current_user, "channels": channels, "error": None, "success": None},
+        {"user": current_user, "channels": channels, "digests": digests, "error": None, "success": None},
     )
 
 
@@ -79,9 +85,15 @@ async def update_settings(
     )
     channels = repo.get_user_channels(current_user.id)
     updated_user = repo.get_user_by_id(current_user.id)
+    channel_ids = [c.channel_id for c in channels] if channels else None
+    digests = repo.get_unsent_digests_for_user(
+        user_id=current_user.id,
+        hours=240,
+        channel_ids=channel_ids
+    )
     return templates.TemplateResponse(
         request, "dashboard.html",
-        {"user": updated_user, "channels": channels, "error": None, "success": "Profile saved."},
+        {"user": updated_user, "channels": channels, "digests": digests, "error": None, "success": "Profile saved."},
     )
 
 
@@ -95,11 +107,17 @@ async def add_channel(
     repo = Repository(db)
     channel_id = _extract_channel_id(channel_input)
     channels = repo.get_user_channels(current_user.id)
+    channel_ids = [c.channel_id for c in channels] if channels else None
+    digests = repo.get_unsent_digests_for_user(
+        user_id=current_user.id,
+        hours=240,
+        channel_ids=channel_ids
+    )
 
     if not channel_id:
         return templates.TemplateResponse(
             request, "dashboard.html",
-            {"user": current_user, "channels": channels, "error": "Could not find a valid channel ID in that input.", "success": None},
+            {"user": current_user, "channels": channels, "digests": digests, "error": "Could not find a valid channel ID in that input.", "success": None},
             status_code=400,
         )
 
@@ -108,14 +126,20 @@ async def add_channel(
     if result is None:
         return templates.TemplateResponse(
             request, "dashboard.html",
-            {"user": current_user, "channels": channels, "error": "That channel is already in your list.", "success": None},
+            {"user": current_user, "channels": channels, "digests": digests, "error": "That channel is already in your list.", "success": None},
             status_code=400,
         )
 
     channels = repo.get_user_channels(current_user.id)
+    channel_ids = [c.channel_id for c in channels] if channels else None
+    digests = repo.get_unsent_digests_for_user(
+        user_id=current_user.id,
+        hours=240,
+        channel_ids=channel_ids
+    )
     return templates.TemplateResponse(
         request, "dashboard.html",
-        {"user": current_user, "channels": channels, "error": None, "success": f"Added: {channel_name or channel_id}"},
+        {"user": current_user, "channels": channels, "digests": digests, "error": None, "success": f"Added: {channel_name or channel_id}"},
     )
 
 

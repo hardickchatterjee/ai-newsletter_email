@@ -1,10 +1,14 @@
 import os
 import json
+import time
+import logging
 from typing import Optional
 from openai import OpenAI
 from pydantic import BaseModel
 from pathlib import Path
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
@@ -36,25 +40,32 @@ class DigestAgent:
         self.model = "llama-3.3-70b-versatile"
         self.system_prompt = PROMPT
 
-    def generate_digest(self, title: str, content: str, article_type: str) -> Optional[DigestOutput]:
-        try:
-            user_prompt = f"Create a digest for this {article_type}:\nTitle: {title}\nContent: {content[:8000]}"
+    def generate_digest(self, title: str, content: str, article_type: str, max_retries: int = 3) -> Optional[DigestOutput]:
+        user_prompt = f"Create a digest for this {article_type}:\nTitle: {title}\nContent: {content[:8000]}"
 
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.7
-            )
+        for attempt in range(max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": self.system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.7
+                )
 
-            data = json.loads(response.choices[0].message.content)
-            return DigestOutput(**data)
-        except Exception as e:
-            print(f"Error generating digest: {e}")
-            return None
+                data = json.loads(response.choices[0].message.content)
+                return DigestOutput(**data)
+            except Exception as e:
+                logger.warning(f"Attempt {attempt + 1}/{max_retries} failed for digest: {e}")
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt
+                    logger.info(f"Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"Failed to generate digest after {max_retries} attempts")
+                    return None
 
 
 JUDGE_PROMPT = """You are a quality judge for AI news digest summaries. Evaluate whether a generated summary meets a minimum quality bar for inclusion in a daily email digest.
@@ -98,6 +109,7 @@ class JudgeAgent:
         digest_title: str,
         digest_summary: str,
         article_type: str,
+        max_retries: int = 3,
     ) -> Optional[JudgeOutput]:
         user_prompt = (
             f"Original {article_type} title: {original_title}\n"
@@ -106,18 +118,26 @@ class JudgeAgent:
             f"Generated summary: {digest_summary}\n\n"
             "Evaluate the quality of the generated digest."
         )
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": JUDGE_PROMPT},
-                    {"role": "user", "content": user_prompt}
-                ],
-                response_format={"type": "json_object"},
-                temperature=0.1,
-            )
-            data = json.loads(response.choices[0].message.content)
-            return JudgeOutput(**data)
-        except Exception as e:
-            print(f"Error in judge: {e}")
-            return None
+
+        for attempt in range(max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": JUDGE_PROMPT},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.1,
+                )
+                data = json.loads(response.choices[0].message.content)
+                return JudgeOutput(**data)
+            except Exception as e:
+                logger.warning(f"Attempt {attempt + 1}/{max_retries} failed for judge: {e}")
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt
+                    logger.info(f"Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
+                else:
+                    logger.error(f"Failed to judge digest after {max_retries} attempts")
+                    return None

@@ -1,4 +1,11 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import secrets; print\\(secrets.token_hex\\(32\\)\\)\")",
+      "Bash(export SECRET_KEY)",
+      "Bash(python app/database/create_tables.py)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {

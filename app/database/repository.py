@@ -250,10 +250,10 @@ class Repository:
 
     # --- User methods ---
 
-    def create_user(self, email: str, name: str, password_hash: str) -> Optional[User]:
+    def create_user(self, email: str, name: str, password_hash: str, email_verification_token: Optional[str] = None) -> Optional[User]:
         if self.session.query(User).filter_by(email=email).first():
             return None
-        user = User(email=email, name=name, password_hash=password_hash)
+        user = User(email=email, name=name, password_hash=password_hash, email_verification_token=email_verification_token)
         self.session.add(user)
         self.session.commit()
         return user
@@ -263,6 +263,26 @@ class Repository:
 
     def get_user_by_id(self, user_id) -> Optional[User]:
         return self.session.query(User).filter_by(id=user_id).first()
+
+    def get_user_by_verification_token(self, token: str) -> Optional[User]:
+        return self.session.query(User).filter_by(email_verification_token=token).first()
+
+    def get_user_by_reset_token(self, token: str) -> Optional[User]:
+        now = datetime.now(timezone.utc)
+        return self.session.query(User).filter(
+            User.password_reset_token == token,
+            User.password_reset_expires > now
+        ).first()
+
+    def update_user(self, user_id, **kwargs) -> bool:
+        user = self.session.query(User).filter_by(id=user_id).first()
+        if not user:
+            return False
+        for key, value in kwargs.items():
+            if hasattr(user, key):
+                setattr(user, key, value)
+        self.session.commit()
+        return True
 
     def update_user_profile(self, user_id, **kwargs) -> bool:
         user = self.session.query(User).filter_by(id=user_id).first()

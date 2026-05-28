@@ -72,6 +72,10 @@ class User(Base):
     content_depth = Column(String(100), nullable=True)
     content_type = Column(String(100), nullable=True)
     is_active = Column(Boolean, default=True)
+    email_verified = Column(Boolean, default=False)
+    email_verification_token = Column(String(255), nullable=True)
+    password_reset_token = Column(String(255), nullable=True)
+    password_reset_expires = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

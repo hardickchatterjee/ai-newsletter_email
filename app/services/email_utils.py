@@ -1,5 +1,7 @@
 import os
 import html
+import logging
+import time
 from dotenv import load_dotenv
 import markdown
 import resend
@@ -8,9 +10,10 @@ load_dotenv()
 
 MY_EMAIL = os.getenv("MY_EMAIL")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+logger = logging.getLogger(__name__)
 
 
-def send_email(subject: str, body_text: str, body_html: str = None, recipients: list = None):
+def send_email(subject: str, body_text: str, body_html: str = None, recipients: list = None, max_retries: int = 3):
     if recipients is None:
         if not MY_EMAIL:
             raise ValueError("MY_EMAIL environment variable is not set")
@@ -34,7 +37,23 @@ def send_email(subject: str, body_text: str, body_html: str = None, recipients: 
     if body_html:
         params["html"] = body_html
 
-    resend.Emails.send(params)
+    for attempt in range(max_retries):
+        try:
+            response = resend.Emails.send(params)
+            if response:
+                logger.info(f"Email sent successfully to {recipients}")
+                return response
+            else:
+                raise Exception("Resend API returned empty response")
+        except Exception as e:
+            logger.warning(f"Send attempt {attempt + 1}/{max_retries} failed: {e}")
+            if attempt < max_retries - 1:
+                wait_time = 2 ** attempt
+                logger.info(f"Retrying in {wait_time} seconds...")
+                time.sleep(wait_time)
+            else:
+                logger.error(f"Failed to send email after {max_retries} attempts")
+                raise
 
 
 def markdown_to_html(markdown_text: str) -> str:

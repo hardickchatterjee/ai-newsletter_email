@@ -11,7 +11,9 @@ from app.database.models import User
 from app.database.repository import Repository
 from app.web.dependencies import get_db
 
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-in-production")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY environment variable must be set. Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\"")
 ALGORITHM = "HS256"
 TOKEN_TTL_DAYS = 7
 
